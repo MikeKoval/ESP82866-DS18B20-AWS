@@ -33,7 +33,7 @@
 // Data wire is plugged into pin D1 on the ESP8266 12-E - GPIO 5
 #define ONE_WIRE_BUS D1
 
-#define LED D4 //GPIO2 - Led auf dem Modul selbst
+#define RELAY_PIN D5 //GPIO2 - Led auf dem Modul selbst
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
@@ -71,7 +71,7 @@ const long sendMsgPeriod = 1000 * 60;
 const long tempSensPeriod = 1000;
 
 float tempC;
-const float tempToSwitchOn = 25;
+const float tempToSwitchOn = 27;
 const float tempToSwitchOff = 30;
 boolean isHeatingEnabled = false;
 
@@ -155,10 +155,8 @@ bool connect () {
     Serial.print (ESP.getFreeHeap ());
     Serial.println (")");
 
-
-
-
    int rc = ipstack.connect(aws_endpoint, port);
+
     if (rc != 1)
     {
       Serial.println("error connection to the websocket server");
@@ -221,31 +219,34 @@ void sendmessage () {
 
 
 void setup() {
-    pinMode(LED, OUTPUT);
-    digitalWrite(LED, HIGH);
+    pinMode(RELAY_PIN, OUTPUT);
+    digitalWrite(RELAY_PIN, HIGH);
+
+    configTime(1000, 0, "pool.ntp.org", "time.nist.gov");
+    //fill AWS parameters    
+        awsWSclient.setAWSRegion(aws_region);
+        awsWSclient.setAWSDomain(aws_endpoint);
+        awsWSclient.setAWSKeyID(aws_key);
+        awsWSclient.setAWSSecretKey(aws_secret);
+        awsWSclient.setUseSSL(true);
+
+    //fill with ssid and wifi password
 
     Serial.begin (115200);
     delay (2000);
     Serial.setDebugOutput(1);
 
-    //fill with ssid and wifi password
     WiFiMulti.addAP(wifi_ssid, wifi_password);
     Serial.println ("connecting to wifi");
-    while(WiFiMulti.run() != WL_CONNECTED) {
+    if(WiFiMulti.run() == WL_CONNECTED) {
         delay(100);
         Serial.print (".");
-    }
-    Serial.println ("\nconnected");
 
-    //fill AWS parameters    
-    awsWSclient.setAWSRegion(aws_region);
-    awsWSclient.setAWSDomain(aws_endpoint);
-    awsWSclient.setAWSKeyID(aws_key);
-    awsWSclient.setAWSSecretKey(aws_secret);
-    awsWSclient.setUseSSL(true);
-
-    if (connect ()){
-      subscribe ();
+        Serial.println ("\nconnected");
+    
+        if (connect ()){
+          subscribe ();
+        }
     }
 }
 
@@ -260,11 +261,11 @@ void loop() {
 
       if (tempC <= tempToSwitchOn) {
         isHeatingEnabled = true;
-        digitalWrite(LED, LOW);
+        digitalWrite(RELAY_PIN, LOW);
       }
       if (tempC > tempToSwitchOff) {
         isHeatingEnabled = false;
-        digitalWrite(LED, HIGH);
+        digitalWrite(RELAY_PIN, HIGH);
       }
     }
 
@@ -274,7 +275,7 @@ void loop() {
       sendmessage ();
   } else {
     //handle reconnection
-    if (connect ()){
+    if (WiFiMulti.run() == WL_CONNECTED && connect ()){
       subscribe ();      
     }
   }
